@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["add_pyo3_api","doc_field"],"derive":["ApproxEq","HistoryVec"]};

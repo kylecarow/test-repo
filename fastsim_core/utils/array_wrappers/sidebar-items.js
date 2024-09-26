@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Pyo3ArrayBool","Pyo3ArrayF64","Pyo3ArrayI32","Pyo3ArrayU32","Pyo3VecF64"]};

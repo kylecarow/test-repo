@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["enabled_features"],"macro":["check_orphaned_and_set","format_dbg","print_to_py"],"mod":["air","cycle","imports","macros","params","pyo3imports","simdrive","simdrivelabel","thermal","traits","utils","vehicle","vehicle_import","vehicle_thermal","vehicle_utils"]};

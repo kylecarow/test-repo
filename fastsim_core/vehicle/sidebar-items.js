@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ATKINSON","BEV","CONV","DIESEL","FC_EFF_TYPES","H2FC","HD_DIESEL","HEV","PHEV","SI","VEH_PT_TYPES"],"struct":["RustVehicle"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("vehicle_import_cli", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.")

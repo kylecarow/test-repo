@@ -1,0 +1,1257 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fastsim-core/src/simdrive.rs`."><title>simdrive.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fastsim_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Module containing vehicle struct and related functions.
+</span><span class="comment">// crate local
+</span><span class="kw">use </span><span class="kw">crate</span>::cycle::{RustCycle, RustCycleCache};
+<span class="kw">use </span><span class="kw">crate</span>::imports::<span class="kw-2">*</span>;
+<span class="kw">use </span><span class="kw">crate</span>::params::RustPhysicalProperties;
+<span class="kw">use </span><span class="kw">crate</span>::proc_macros::add_pyo3_api;
+<span class="attr">#[cfg(feature = <span class="string">"pyo3"</span>)]
+</span><span class="kw">use </span><span class="kw">crate</span>::pyo3imports::<span class="kw-2">*</span>;
+<span class="kw">use </span><span class="kw">crate</span>::vehicle::<span class="kw-2">*</span>;
+<span class="kw">pub mod </span>cyc_mods;
+<span class="kw">pub mod </span>simdrive_impl;
+<span class="kw">pub mod </span>simdrive_iter;
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[add_pyo3_api(
+    <span class="kw">pub fn </span>__getnewargs__(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">todo!</span>();
+    }
+)]
+</span><span class="doccomment">/// Struct containing time trace data
+</span><span class="kw">pub struct </span>RustSimDriveParams {
+    <span class="doccomment">/// if true, accuracy will be favored over performance for grade per step estimates
+    /// Specifically, for performance, grade for a step will be assumed to be the grade
+    /// looked up at step start distance. For accuracy, the actual elevations will be
+    /// used. This distinciton only makes a difference for CAV maneuvers.
+    </span><span class="kw">pub </span>favor_grade_accuracy: bool,
+    <span class="doccomment">/// if true, missed trace correction is active, default = False.  If missed
+    /// trace correction is active, time step will be "dilated" to be long enough for
+    /// vehicle to "catch up" with trace.
+    </span><span class="kw">pub </span>missed_trace_correction: bool,
+    <span class="doccomment">/// maximum time dilation factor to "catch up" with trace -- e.g. 1.0 means 100% increase in step size
+    </span><span class="kw">pub </span>max_time_dilation: f64,
+    <span class="doccomment">/// minimum time dilation margin to let trace "catch up" -- e.g. -0.5 means 50% reduction in step size
+    </span><span class="kw">pub </span>min_time_dilation: f64,
+    <span class="doccomment">/// convergence criteria for time dilation in iterating on time step size to achieve distance parity
+    </span><span class="kw">pub </span>time_dilation_tol: f64,
+    <span class="doccomment">/// number of iterations to achieve time dilation correction
+    </span><span class="kw">pub </span>max_trace_miss_iters: u32,
+    <span class="doccomment">/// threshold for triggering warning log message if vehicle speed deficit [m/s]
+    /// relative to prescribed speed exceeds this amount
+    </span><span class="kw">pub </span>trace_miss_speed_mps_tol: f64,
+    <span class="doccomment">/// threshold for triggering warning log message if achieved elapsed time
+    /// relative to prescribed elapsed time exceeds this fractional amount
+    </span><span class="kw">pub </span>trace_miss_time_tol: f64,
+    <span class="doccomment">/// threshold for triggering warning log message if achieved distance
+    /// relative to prescribed distance exceeds this fractional amount
+    </span><span class="kw">pub </span>trace_miss_dist_tol: f64,
+    <span class="doccomment">/// max allowable number of HEV SOC iterations
+    </span><span class="kw">pub </span>sim_count_max: usize,
+    <span class="doccomment">/// newton solver gain
+    </span><span class="kw">pub </span>newton_gain: f64,
+    <span class="doccomment">/// newton solver max iterations
+    </span><span class="kw">pub </span>newton_max_iter: u32,
+    <span class="doccomment">/// newton solver tolerance
+    </span><span class="kw">pub </span>newton_xtol: f64,
+    <span class="doccomment">/// tolerance for energy audit error warning, i.e. 0.1%
+    </span><span class="kw">pub </span>energy_audit_error_tol: f64,
+    <span class="comment">// Eco-Coasting Maneuver Parameters
+    </span><span class="doccomment">/// if true, coasting to stops are allowed
+    </span><span class="kw">pub </span>coast_allow: bool,
+    <span class="doccomment">/// if true, coasting vehicle can eclipse the shadow trace (i.e., reference vehicle in front)
+    </span><span class="kw">pub </span>coast_allow_passing: bool,
+    <span class="doccomment">/// maximum allowable speed under coast (m/s)
+    </span><span class="kw">pub </span>coast_max_speed_m_per_s: f64,
+    <span class="doccomment">/// acceleration assumed during braking for coast maneuvers (m/s2). note: should be negative
+    </span><span class="kw">pub </span>coast_brake_accel_m_per_s2: f64,
+    <span class="doccomment">/// speed when friction braking will initiate during coasting maneuvers (m/s)
+    </span><span class="kw">pub </span>coast_brake_start_speed_m_per_s: f64,
+    <span class="doccomment">/// initiates coast when vehicle hits this speed if &gt; 0; this is mainly for forceing coasting to initiate for testing. (m/s)
+    </span><span class="kw">pub </span>coast_start_speed_m_per_s: f64,
+    <span class="doccomment">/// "look-ahead" time for speed changes to be considered to feature coasting to hit a given stopping distance mark (s)
+    </span><span class="kw">pub </span>coast_time_horizon_for_adjustment_s: f64,
+    <span class="comment">// IDM - Intelligent Driver Model, Adaptive Cruise Control version
+    </span><span class="doccomment">/// if true, initiates the IDM - Intelligent Driver Model, Adaptive Cruise Control version
+    </span><span class="kw">pub </span>idm_allow: bool,
+    <span class="doccomment">/// IDM algorithm: desired speed (m/s)
+    </span><span class="kw">pub </span>idm_v_desired_m_per_s: f64,
+    <span class="doccomment">/// IDM algorithm: headway time desired to vehicle in front (s)
+    </span><span class="kw">pub </span>idm_dt_headway_s: f64,
+    <span class="doccomment">/// IDM algorithm: minimum desired gap between vehicle and lead vehicle (m)
+    </span><span class="kw">pub </span>idm_minimum_gap_m: f64,
+    <span class="doccomment">/// IDM algorithm: delta parameter
+    </span><span class="kw">pub </span>idm_delta: f64,
+    <span class="doccomment">/// IDM algorithm: acceleration parameter
+    </span><span class="kw">pub </span>idm_accel_m_per_s2: f64,
+    <span class="doccomment">/// IDM algorithm: deceleration parameter
+    </span><span class="kw">pub </span>idm_decel_m_per_s2: f64,
+    <span class="doccomment">/// IDM algorithm: a way to specify desired speed by course distance
+    /// traveled. Can simulate changing speed limits over a driving cycle
+    /// optional list of (distance (m), desired speed (m/s))
+    </span><span class="kw">pub </span>idm_v_desired_in_m_per_s_by_distance_m: <span class="prelude-ty">Option</span>&lt;Vec&lt;(f64, f64)&gt;&gt;,
+    <span class="comment">// Other, Misc.
+    </span><span class="doccomment">/// EPA fuel economy adjustment parameters; maximum EPA adjustment factor
+    </span><span class="kw">pub </span>max_epa_adj: f64,
+    <span class="attr">#[serde(skip)]
+    </span><span class="kw">pub </span>orphaned: bool,
+}
+
+<span class="kw">impl </span>SerdeAPI <span class="kw">for </span>RustSimDriveParams {}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>RustSimDriveParams {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="comment">// if True, accuracy will be favored over performance for grade per step estimates
+        // Specifically, for performance, grade for a step will be assumed to be the grade
+        // looked up at step start distance. For accuracy, the actual elevations will be
+        // used. This distinciton only makes a difference for CAV maneuvers.
+        </span><span class="kw">let </span>favor_grade_accuracy = <span class="bool-val">true</span>;
+        <span class="comment">// if true, missed trace correction is active, default = false
+        </span><span class="kw">let </span>missed_trace_correction = <span class="bool-val">false</span>;
+        <span class="comment">// maximum time dilation factor to "catch up" with trace -- e.g. 1.0 means 100% increase in step size
+        </span><span class="kw">let </span>max_time_dilation = <span class="number">1.0</span>;
+        <span class="comment">// minimum time dilation margin to let trace "catch up" -- e.g. -0.5 means 50% reduction in step size
+        </span><span class="kw">let </span>min_time_dilation = -<span class="number">0.5</span>;
+        <span class="kw">let </span>time_dilation_tol = <span class="number">5e-4</span>; <span class="comment">// convergence criteria for time dilation
+        </span><span class="kw">let </span>max_trace_miss_iters = <span class="number">5</span>; <span class="comment">// number of iterations to achieve time dilation correction
+        </span><span class="kw">let </span>trace_miss_speed_mps_tol = <span class="number">1.0</span>; <span class="comment">// # threshold of error in speed [m/s] that triggers warning
+        </span><span class="kw">let </span>trace_miss_time_tol = <span class="number">1e-3</span>; <span class="comment">// threshold for printing warning when time dilation is active
+        </span><span class="kw">let </span>trace_miss_dist_tol = <span class="number">1e-3</span>; <span class="comment">// threshold of fractional eror in distance that triggers warning
+        </span><span class="kw">let </span>sim_count_max = <span class="number">30</span>; <span class="comment">// max allowable number of HEV SOC iterations
+        </span><span class="kw">let </span>newton_gain = <span class="number">0.9</span>; <span class="comment">// newton solver gain
+        </span><span class="kw">let </span>newton_max_iter = <span class="number">100</span>; <span class="comment">// newton solver max iterations
+        </span><span class="kw">let </span>newton_xtol = <span class="number">1e-9</span>; <span class="comment">// newton solver tolerance
+        </span><span class="kw">let </span>energy_audit_error_tol = <span class="number">0.002</span>; <span class="comment">// tolerance for energy audit error warning, i.e. 0.1%
+                                            // Coasting
+        </span><span class="kw">let </span>coast_allow = <span class="bool-val">false</span>;
+        <span class="kw">let </span>coast_allow_passing = <span class="bool-val">false</span>;
+        <span class="kw">let </span>coast_max_speed_m_per_s = <span class="number">40.0</span>;
+        <span class="kw">let </span>coast_brake_accel_m_per_s2 = -<span class="number">2.5</span>;
+        <span class="kw">let </span>coast_brake_start_speed_m_per_s = <span class="number">7.5</span>;
+        <span class="kw">let </span>coast_start_speed_m_per_s = <span class="number">0.0</span>; <span class="comment">// m/s, if &gt; 0, initiates coast when vehicle hits this speed; mostly for testing
+        </span><span class="kw">let </span>coast_time_horizon_for_adjustment_s = <span class="number">20.0</span>;
+        <span class="comment">// Following
+        </span><span class="kw">let </span>idm_allow = <span class="bool-val">false</span>;
+        <span class="comment">// IDM - Intelligent Driver Model, Adaptive Cruise Control version
+        </span><span class="kw">let </span>idm_v_desired_m_per_s = <span class="number">33.33</span>;
+        <span class="kw">let </span>idm_dt_headway_s = <span class="number">1.0</span>;
+        <span class="kw">let </span>idm_minimum_gap_m = <span class="number">2.0</span>;
+        <span class="kw">let </span>idm_delta = <span class="number">4.0</span>;
+        <span class="kw">let </span>idm_accel_m_per_s2 = <span class="number">1.0</span>;
+        <span class="kw">let </span>idm_decel_m_per_s2 = <span class="number">1.5</span>;
+        <span class="kw">let </span>idm_v_desired_in_m_per_s_by_distance_m = <span class="prelude-val">None</span>;
+        <span class="comment">// EPA fuel economy adjustment parameters
+        </span><span class="kw">let </span>max_epa_adj = <span class="number">0.3</span>; <span class="comment">// maximum EPA adjustment factor
+        </span><span class="self">Self </span>{
+            favor_grade_accuracy,
+            missed_trace_correction,
+            max_time_dilation,
+            min_time_dilation,
+            time_dilation_tol,
+            max_trace_miss_iters,
+            trace_miss_speed_mps_tol,
+            trace_miss_time_tol,
+            trace_miss_dist_tol,
+            sim_count_max,
+            newton_gain,
+            newton_max_iter,
+            newton_xtol,
+            energy_audit_error_tol,
+            coast_allow,
+            coast_allow_passing,
+            coast_max_speed_m_per_s,
+            coast_brake_accel_m_per_s2,
+            coast_brake_start_speed_m_per_s,
+            coast_start_speed_m_per_s,
+            coast_time_horizon_for_adjustment_s,
+            idm_allow,
+            idm_v_desired_m_per_s,
+            idm_dt_headway_s,
+            idm_minimum_gap_m,
+            idm_delta,
+            idm_accel_m_per_s2,
+            idm_decel_m_per_s2,
+            idm_v_desired_in_m_per_s_by_distance_m,
+            max_epa_adj,
+            orphaned: <span class="bool-val">false</span>,
+        }
+    }
+}
+
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[add_pyo3_api(
+    <span class="doccomment">/// method for instantiating SimDriveRust
+    </span><span class="attr">#[new]
+    </span><span class="kw">pub fn </span>__new__(cyc: RustCycle, veh: RustVehicle) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(cyc, veh)
+    }
+
+    <span class="kw">pub fn </span>__getnewargs__(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">todo!</span>();
+    }
+
+    <span class="comment">// wrappers for core methods
+
+    </span><span class="attr">#[pyo3(name = <span class="string">"gap_to_lead_vehicle_m"</span>)]
+    </span><span class="doccomment">/// Provides the gap-with lead vehicle from start to finish
+    </span><span class="kw">pub fn </span>gap_to_lead_vehicle_m_py(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;f64&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.gap_to_lead_vehicle_m().to_vec())
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"sim_drive"</span>)]
+    </span><span class="doccomment">/// Initialize and run sim_drive_walk as appropriate for vehicle attribute vehPtType.
+    /// Arguments
+    /// ------------
+    /// init_soc: initial SOC for electrified vehicles.
+    /// aux_in_kw: aux_in_kw override.  Array of same length as cyc.time_s.
+    ///     Default of None causes veh.aux_kw to be used.
+    </span><span class="kw">pub fn </span>sim_drive_py(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        init_soc: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+        aux_in_kw_override: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>aux_in_kw_override = aux_in_kw_override.map(Array1::from);
+        <span class="self">self</span>.sim_drive(init_soc, aux_in_kw_override)
+    }
+
+    <span class="doccomment">/// Receives second-by-second cycle information, vehicle properties,
+    /// and an initial state of charge and runs sim_drive_step to perform a
+    /// backward facing powertrain simulation. Method 'sim_drive' runs this
+    /// iteratively to achieve correct SOC initial and final conditions, as
+    /// needed.
+    ///
+    /// Arguments
+    /// ------------
+    /// init_soc (optional): initial battery state-of-charge (SOC) for electrified vehicles
+    /// aux_in_kw: aux_in_kw override.  Array of same length as cyc.time_s.
+    ///         None causes veh.aux_kw to be used.
+    </span><span class="kw">pub fn </span>sim_drive_walk(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        init_soc: f64,
+        aux_in_kw_override: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>aux_in_kw_override = aux_in_kw_override.map(Array1::from);
+        <span class="self">self</span>.walk(init_soc, aux_in_kw_override)
+    }
+
+    <span class="doccomment">/// Sets the intelligent driver model parameters for an eco-cruise driving trajectory.
+    /// This is a convenience method instead of setting the sim_params.idm* parameters yourself.
+    /// - by_microtrip: bool, if True, target speed is set by microtrip, else by cycle
+    /// - extend_fraction: float, the fraction of time to extend the cycle to allow for catch-up
+    ///     of the following vehicle
+    /// - blend_factor: float, a value between 0 and 1; only used of by_microtrip is True, blends
+    ///     between microtrip average speed and microtrip average speed when moving. Must be
+    ///     between 0 and 1 inclusive
+    </span><span class="kw">pub fn </span>activate_eco_cruise(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        by_microtrip: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+        extend_fraction: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+        blend_factor: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+        min_target_speed_m_per_s: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>by_microtrip = by_microtrip.unwrap_or(<span class="bool-val">false</span>);
+        <span class="kw">let </span>extend_fraction = extend_fraction.unwrap_or(<span class="number">0.1</span>);
+        <span class="kw">let </span>blend_factor = blend_factor.unwrap_or(<span class="number">0.0</span>);
+        <span class="kw">let </span>min_target_speed_m_per_s = min_target_speed_m_per_s.unwrap_or(<span class="number">8.0</span>);
+            <span class="self">self</span>.activate_eco_cruise_rust(
+                by_microtrip, extend_fraction, blend_factor, min_target_speed_m_per_s)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"init_for_step"</span>)]
+    </span><span class="doccomment">/// This is a specialty method which should be called prior to using
+    /// sim_drive_step in a loop.
+    /// Arguments
+    /// ------------
+    /// init_soc: initial battery state-of-charge (SOC) for electrified vehicles
+    /// aux_in_kw: aux_in_kw override.  Array of same length as cyc.time_s.
+    ///         Default of None causes veh.aux_kw to be used.
+    </span><span class="kw">pub fn </span>init_for_step_py(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        init_soc:f64,
+        aux_in_kw_override: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>aux_in_kw_override = aux_in_kw_override.map(Array1::from);
+        <span class="self">self</span>.init_for_step(init_soc, aux_in_kw_override)
+    }
+
+    <span class="doccomment">/// Step through 1 time step.
+    </span><span class="kw">pub fn </span>sim_drive_step(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.step()
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"solve_step"</span>)]
+    </span><span class="doccomment">/// Perform all the calculations to solve 1 time step.
+    </span><span class="kw">pub fn </span>solve_step_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.solve_step(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_misc_calcs"</span>)]
+    </span><span class="doccomment">/// Sets misc. calculations at time step 'i'
+    /// Arguments:
+    /// ----------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_misc_calcs_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_misc_calcs(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_comp_lims"</span>)]
+    </span><span class="comment">// Calculate actual speed achieved if vehicle hardware cannot achieve trace speed.
+    // Arguments
+    // ------------
+    // i: index of time step
+    </span><span class="kw">pub fn </span>set_comp_lims_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_comp_lims(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_power_calcs"</span>)]
+    </span><span class="doccomment">/// Calculate power requirements to meet cycle and determine if
+    /// cycle can be met.
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_power_calcs_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_power_calcs(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_ach_speed"</span>)]
+    </span><span class="comment">// Calculate actual speed achieved if vehicle hardware cannot achieve trace speed.
+    // Arguments
+    // ------------
+    // i: index of time step
+    </span><span class="kw">pub fn </span>set_ach_speed_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_ach_speed(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_hybrid_cont_calcs"</span>)]
+    </span><span class="doccomment">/// Hybrid control calculations.
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_hybrid_cont_calcs_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_hybrid_cont_calcs(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_fc_forced_state"</span>)]
+    </span><span class="doccomment">/// Calculate control variables related to engine on/off state
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    /// `_py` extension is needed to avoid name collision with getter/setter methods
+    </span><span class="kw">pub fn </span>set_fc_forced_state_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_fc_forced_state_rust(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_hybrid_cont_decisions"</span>)]
+    </span><span class="doccomment">/// Hybrid control decisions.
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_hybrid_cont_decisions_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_hybrid_cont_decisions(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_fc_power"</span>)]
+    </span><span class="doccomment">/// Sets power consumption values for the current time step.
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_fc_power_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_fc_power(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_time_dilation"</span>)]
+    </span><span class="doccomment">/// Sets the time dilation for the current step.
+    /// Arguments
+    /// ------------
+    /// i: index of time step
+    </span><span class="kw">pub fn </span>set_time_dilation_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: usize) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_time_dilation(i)
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"set_post_scalars"</span>)]
+    </span><span class="doccomment">/// Sets scalar variables that can be calculated after a cycle is run.
+    /// This includes mpgge, various energy metrics, and others
+    </span><span class="kw">pub fn </span>set_post_scalars_py(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.set_post_scalars()
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"len"</span>)]
+    </span><span class="kw">pub fn </span>len_py(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.len()
+    }
+
+    <span class="attr">#[pyo3(name = <span class="string">"is_empty"</span>)]
+    </span><span class="kw">pub fn </span>is_empty_py(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.is_empty()
+    }
+
+    <span class="attr">#[getter]
+    </span><span class="kw">pub fn </span>get_fs_cumu_mj_out_ach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Pyo3ArrayF64 {
+        Pyo3ArrayF64::new(ndarrcumsum(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.fs_kw_out_ach * <span class="self">self</span>.cyc.dt_s() * <span class="number">1e-3</span>)))
+    }
+    <span class="attr">#[getter]
+    </span><span class="kw">pub fn </span>get_fc_cumu_mj_out_ach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Pyo3ArrayF64 {
+        Pyo3ArrayF64::new(ndarrcumsum(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.fc_kw_out_ach * <span class="self">self</span>.cyc.dt_s() * <span class="number">1e-3</span>)))
+    }
+)]
+<span class="kw">pub struct </span>RustSimDrive {
+    <span class="kw">pub </span>hev_sim_count: usize,
+    <span class="attr">#[api(has_orphaned)]
+    </span><span class="kw">pub </span>veh: RustVehicle,
+    <span class="attr">#[api(has_orphaned)]
+    </span><span class="kw">pub </span>cyc: RustCycle,
+    <span class="attr">#[api(has_orphaned)]
+    </span><span class="kw">pub </span>cyc0: RustCycle,
+    <span class="attr">#[api(has_orphaned)]
+    </span><span class="kw">pub </span>sim_params: RustSimDriveParams,
+    <span class="attr">#[serde(skip)]
+    #[api(has_orphaned)]
+    </span><span class="kw">pub </span>props: RustPhysicalProperties,
+    <span class="kw">pub </span>i: usize, <span class="comment">// 1 # initialize step counter for possible use outside sim_drive_walk()
+    </span><span class="doccomment">/// Current maximum fuel storage output power,
+    /// considering `veh.fs_max_kw` and transient limit,
+    /// as determined by achieved fuel storage power output and `veh.fs_secs_to_peak_pwr`
+    </span><span class="kw">pub </span>cur_max_fs_kw_out: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Transient fuel converter output power limit,
+    /// as determined by achieved fuel converter power output, `veh.fc_max_kw`, and `veh.fs_secs_to_peak_pwr`
+    </span><span class="kw">pub </span>fc_trans_lim_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Current maximum fuel converter output power,
+    /// considering `veh.fc_max_kw` and transient limit `fc_trans_lim_kw`
+    </span><span class="kw">pub </span>cur_max_fc_kw_out: Array1&lt;f64&gt;,
+    <span class="doccomment">/// ESS discharging power limit,
+    /// considering remaining ESS energy and ESS efficiency
+    </span><span class="kw">pub </span>ess_cap_lim_dischg_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Current maximum ESS output power,
+    /// considering `ess_cap_lim_dischg_kw` and `veh.ess_max_kw`
+    </span><span class="kw">pub </span>cur_ess_max_kw_out: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Current maximum electrical power that can go toward propulsion,
+    /// `cur_max_elec_kw` limited by the maximum theoretical motor input power `veh.mc_max_elec_in_kw`
+    </span><span class="kw">pub </span>cur_max_avail_elec_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// ESS charging power limit,
+    /// considering unused energy capacity and ESS efficiency
+    </span><span class="kw">pub </span>ess_cap_lim_chg_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// ESS charging power limit,
+    /// considering `ess_cap_lim_chg_kw` and `veh.ess_max_kw`
+    </span><span class="kw">pub </span>cur_max_ess_chg_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Current maximum electrical power that can go toward propulsion:
+    /// if FCEV, equal to `cur_max_fc_kw_out` + `cur_max_roadway_chg_kw` + `cur_ess_max_kw_out` - `aux_in_kw`,
+    /// otherwise equal to `cur_max_roadway_chg_kw` + `cur_ess_max_kw_out` - `aux_in_kw`
+    </span><span class="kw">pub </span>cur_max_elec_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mc_elec_in_lim_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Transient electric motor output power limit,
+    /// as determined by achieved motor mechanical power output, `veh.mc_max_kw`, and `veh.ms_secs_to_peak_pwr`
+    </span><span class="kw">pub </span>mc_transi_lim_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_max_mc_kw_out: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_lim_mc_regen_perc_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// ESS limit on electricity regeneration,
+    /// considering `veh.mc_max_kw`, or `cur_max_ess_chg_kw` and motor efficiency
+    </span><span class="kw">pub </span>cur_max_mech_mc_kw_in: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_max_trans_kw_out: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Required tractive power to meet cycle,
+    /// equal to `drag_kw` + `accel_kw` + `ascent_kw`
+    </span><span class="kw">pub </span>cyc_trac_kw_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_max_trac_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>spare_trac_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cyc_whl_rad_per_sec: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power to change wheel rotational speed,
+    /// calculated with `veh.wheel_inertia_kg_m2` and `veh.num_wheels`
+    </span><span class="kw">pub </span>cyc_tire_inertia_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Required power to wheels to meet cycle,
+    /// equal to `cyc_trac_kw_req` + `rr_kw` + `cyc_tire_inertia_kw`
+    </span><span class="kw">pub </span>cyc_whl_kw_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>regen_contrl_lim_kw_perc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cyc_regen_brake_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power lost to friction braking,
+    /// only nonzero when `cyc_whl_kw_req` is negative and regenerative braking cannot provide enough braking,
+    </span><span class="kw">pub </span>cyc_fric_brake_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Required transmission output power to meet cycle,
+    /// equal to `cyc_whl_kw_req` + `cyc_fric_brake_kw`
+    </span><span class="kw">pub </span>cyc_trans_kw_out_req: Array1&lt;f64&gt;,
+    <span class="doccomment">/// `true` if `cyc_trans_kw_out_req` &lt;= `cur_max_trans_kw_out`
+    </span><span class="kw">pub </span>cyc_met: Array1&lt;bool&gt;,
+    <span class="doccomment">/// Achieved transmission output power,
+    /// either `cyc_trans_kw_out_req` if cycle is met,
+    /// or `cur_max_trans_kw_out` if it is not
+    </span><span class="kw">pub </span>trans_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Achieved transmission input power, accounting for `veh.trans_eff`
+    </span><span class="kw">pub </span>trans_kw_in_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_soc_target: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>min_mc_kw_2help_fc: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Achieved electric motor mechanical output power to transmission
+    </span><span class="kw">pub </span>mc_mech_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Achieved electric motor electrical input power,
+    /// accounting for electric motor efficiency
+    </span><span class="kw">pub </span>mc_elec_kw_in_ach: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Auxiliary power load,
+    /// optionally overridden with an input array,
+    /// or if aux loads are forced to go through alternator (when `veh.no_elec_aux` is `true`) equal to `veh.aux_kw` / `veh.alt_eff`
+    /// otherwise equal to `veh.aux_kw`
+    </span><span class="kw">pub </span>aux_in_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>impose_coast: Array1&lt;bool&gt;,
+    <span class="kw">pub </span>roadway_chg_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>min_ess_kw_2help_fc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_kw_out_ach_pct: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_kw_in_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fs_kw_out_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fs_kwh_out_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_cur_kwh: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Current ESS state of charge,
+    /// multiply by `veh.ess_max_kwh` to calculate remaining ESS energy
+    </span><span class="kw">pub </span>soc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>regen_buff_soc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_regen_buff_dischg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>max_ess_regen_buff_chg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_accel_buff_chg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>accel_buff_soc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>max_ess_accell_buff_dischg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_accel_regen_dischg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mc_elec_in_kw_for_max_fc_eff: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Electrical power requirement for all-electric operation,
+    /// only applicable if vehicle has electrified powertrain,
+    /// equal to `aux_in_kw` + `trans_kw_in_ach` / motor efficiency
+    </span><span class="kw">pub </span>elec_kw_req_4ae: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>can_pwr_all_elec: Array1&lt;bool&gt;,
+    <span class="kw">pub </span>desired_ess_kw_out_for_ae: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_ae_kw_out: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Charging power received from electric roadway (er), if enabled,
+    /// for all electric (ae) operation.
+    </span><span class="kw">pub </span>er_ae_kw_out: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_desired_kw_4fc_eff: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_kw_if_fc_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_max_mc_elec_kw_in: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_kw_gap_fr_eff: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>er_kw_if_fc_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mc_elec_kw_in_if_fc_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mc_kw_if_fc_req: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_forced_on: Array1&lt;bool&gt;,
+    <span class="kw">pub </span>fc_forced_state: Array1&lt;u32&gt;,
+    <span class="doccomment">/// Power the motor (mc) must provide if the engine (fc) is being
+    /// forced on. If the engine just turned on and triggers a regen
+    /// event, it'll be negative.
+    </span><span class="kw">pub </span>mc_mech_kw_4forced_fc: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>fc_time_on: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>prev_fc_time_on: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mps_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>mph_ach: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>dist_m: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>dist_mi: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>high_acc_fc_on_tag: Array1&lt;bool&gt;,
+    <span class="kw">pub </span>reached_buff: Array1&lt;bool&gt;,
+    <span class="kw">pub </span>max_trac_mps: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>add_kwh: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>dod_cycs: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_perc_dead: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power lost to aerodynamic drag according to the drag equation, `1/2 * rho * Cd * A * v_avg³ / 1000`
+    </span><span class="kw">pub </span>drag_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>ess_loss_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power to accelerate, `veh.veh_kg * (v_current² - v_prev²)/2 / dt / 1000`
+    </span><span class="kw">pub </span>accel_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power expended to ascend a grade, `sin(atan(grade)) * props.a_grav_mps2 * veh.veh_kg * v_avg / 1000`
+    </span><span class="kw">pub </span>ascent_kw: Array1&lt;f64&gt;,
+    <span class="doccomment">/// Power lost to rolling resistance, `normal force * veh.wheel_rr_coef * v_avg / 1000`,
+    /// with normal force calculated as `cos(atan(grade)) * veh.veh_kg * props.a_grav_mps2`
+    </span><span class="kw">pub </span>rr_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>cur_max_roadway_chg_kw: Array1&lt;f64&gt;,
+    <span class="kw">pub </span>trace_miss_iters: Array1&lt;u32&gt;,
+    <span class="kw">pub </span>newton_iters: Array1&lt;u32&gt;,
+    <span class="kw">pub </span>fuel_kj: f64,
+    <span class="kw">pub </span>ess_dischg_kj: f64,
+    <span class="kw">pub </span>energy_audit_error: f64,
+    <span class="kw">pub </span>mpgge: f64,
+    <span class="kw">pub </span>roadway_chg_kj: f64,
+    <span class="kw">pub </span>battery_kwh_per_mi: f64,
+    <span class="kw">pub </span>electric_kwh_per_mi: f64,
+    <span class="kw">pub </span>ess2fuel_kwh: f64,
+    <span class="kw">pub </span>drag_kj: f64,
+    <span class="kw">pub </span>ascent_kj: f64,
+    <span class="kw">pub </span>rr_kj: f64,
+    <span class="kw">pub </span>brake_kj: f64,
+    <span class="kw">pub </span>trans_kj: f64,
+    <span class="kw">pub </span>mc_kj: f64,
+    <span class="kw">pub </span>ess_eff_kj: f64,
+    <span class="kw">pub </span>aux_kj: f64,
+    <span class="kw">pub </span>fc_kj: f64,
+    <span class="kw">pub </span>net_kj: f64,
+    <span class="kw">pub </span>ke_kj: f64,
+    <span class="doccomment">/// `true` when the vehicle misses the prescribed speed trace
+    </span><span class="kw">pub </span>trace_miss: bool,
+    <span class="doccomment">/// fractional difference between achieved cumulative distance
+    /// and prescribed cumulative distance
+    </span><span class="kw">pub </span>trace_miss_dist_frac: f64,
+    <span class="doccomment">/// fractional difference between achieved time when trace miss is
+    /// and prescribed cumulative distance
+    </span><span class="kw">pub </span>trace_miss_time_frac: f64,
+    <span class="doccomment">/// Maximum speed by which vehicle's speed falls behind prescribed
+    /// speed trace
+    </span><span class="kw">pub </span>trace_miss_speed_mps: f64,
+    <span class="attr">#[serde(skip)]
+    </span><span class="kw">pub </span>orphaned: bool,
+    <span class="kw">pub </span>coast_delay_index: Array1&lt;i32&gt;,
+    <span class="kw">pub </span>idm_target_speed_m_per_s: Array1&lt;f64&gt;,
+    <span class="attr">#[serde(skip)]
+    </span><span class="kw">pub </span>cyc0_cache: RustCycleCache,
+    <span class="attr">#[api(skip_get, skip_set)]
+    #[serde(skip)]
+    </span>aux_in_kw_override: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;,
+}
+
+<span class="kw">impl </span>SerdeAPI <span class="kw">for </span>RustSimDrive {
+    <span class="kw">fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.veh.init()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="comment">// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn test_walk() {
+//         // CYCLE
+//         let cyc = RustCycle::test_cyc();
+//         let cycle_length = cyc.len();
+
+//         // VEHICLE
+
+//         let veh = RustVehicle::test_veh();
+
+//         // SIM DRIVE
+//         let mut sd = RustSimDrive::__new__(cyc, veh);
+//         let init_soc = 0.5;
+//         sd.walk(init_soc);
+
+//         let expected_final_i = cycle_length;
+//         assert_eq!(sd.i, expected_final_i);
+//     }
+// }
+</span></code></pre></div></section></main></body></html>

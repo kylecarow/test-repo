@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CabinHvacModelTypes","ComponentModelTypes","FcModelTypes","FcTempEffComponent","FcTempEffModel"],"fn":["get_sphere_conv_params"],"struct":["FcTempEffModelExponential","FcTempEffModelLinear","HVACModel","HVACModelHistoryVec","VehicleThermal"]};
