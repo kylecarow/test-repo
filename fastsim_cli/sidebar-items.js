@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["array_to_object_representation","calculate_mpgge_for_h2_diesel_ice","integrate_power_to_kwh","json_rewrite","main","transform_array_of_value_to_ndarray_representation","transform_array_of_value_to_vec_of_f64","translate_veh_pt_type"],"struct":["AdoptHDResults","AdoptResults","ArrayObject","FastSimApi","H2AndDieselResults","ParsedValue"]};

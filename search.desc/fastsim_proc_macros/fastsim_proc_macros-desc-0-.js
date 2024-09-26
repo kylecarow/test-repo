@@ -1,1 +1,0 @@
-searchState.loadedDescShard("fastsim_proc_macros", 0, "Crate that provides procedural macros for fastsim-core\nDerive implementation of ApproxEq trait\nDerive macro that creates <code>*HistoryVec</code> struct from <code>*State</code> …\nAdds pyo3 getters and setters for all fields, unless skip …\nAdds an equivelent <code>*_doc: Option&lt;String&gt;</code> field for each …")
